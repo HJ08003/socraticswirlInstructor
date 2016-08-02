@@ -169,7 +169,7 @@ shinyServer(function(input, output, session) {
 
   cacheStudents <- reactive({
     input$refresh
-    slist = parse_queryAll("StudentList") %>% remove_df_columns() %>% distinct(email)
+    slist = parse_queryAll("StudentList") %>% remove_df_columns() %>% distinct(email, .keep_all=TRUE)
     slist[slist$precept != "Dropped",]
   })
 
@@ -284,7 +284,7 @@ shinyServer(function(input, output, session) {
         # nothing if courseID is presented
         student_list <- NULL
       } else {
-        student_list <- studentRes[studentRes$course == input$courseID, ] %>% distinct(student)
+        student_list <- studentRes[studentRes$course == input$courseID, ] %>% distinct(student, .keep_all=TRUE)
       }
     } else {
       return(NULL)
@@ -421,13 +421,16 @@ shinyServer(function(input, output, session) {
         mutate(attempted = seq_len(n())) %>%
         arrange(last) %>%
         mutate(answered = cumsum(correct)) %>%
+        mutate(first = as.numeric(first)) %>%
+        mutate(last = as.numeric(last)) %>%
         gather(type, time, first, last) %>%
         gather(metric, value, attempted, answered) %>%
         filter((metric == "attempted" & type == "first") |
                  metric == "answered" & type == "last",
                value > 0) %>%
         mutate(pct = (value / users_logged) * 100) %>%
-        arrange(time, pct)
+        arrange(time, pct) %>%
+        mutate(time = as.POSIXct(time, origin="1970-01-01", tz = "EST"))
     }
     else NULL
   })
@@ -618,8 +621,8 @@ addNames <- function(aTable, d=1) {
     if(!is.null(student_responses) & !is.null(lectureInfo)){
       progress_breakdown <- student_responses %>%
         group_by(exercise) %>%
-        distinct(student, exercise, isCorrect) %>%
-        summarise(n = sum(isCorrect)) %>%
+        distinct(student, exercise, isCorrect, .keep_all=TRUE) %>%
+        summarise(n = sum(isCorrect, na.rm = TRUE)) %>%
         mutate(pct = n / users_logged * 100) %>%
         mutate(pct = ifelse(pct > 100,100,pct))
       progress_breakdown <- left_join(lectureInfo,progress_breakdown, by="exercise") %>%
@@ -708,7 +711,7 @@ output$selectCourse <- renderUI({
   output$attemptedBar <- renderUI({
     selected_exercise = selectedExercise()
     if(!is.null(selected_exercise)){
-      attempted = selected_exercise %>% distinct(student) %>% nrow
+      attempted = selected_exercise %>% distinct(student, .keep_all=TRUE) %>% nrow
       attempted_pct = round(attempted/usersLogged() * 100)
       if (attempted_pct > 100) attempted_pct = 100 #Temp fix
     }
@@ -723,7 +726,7 @@ output$selectCourse <- renderUI({
   output$completedBar <- renderUI({
     selected_exercise = selectedExercise()
     if(!is.null(selected_exercise)){
-      completed = selectedExercise() %>% filter(isCorrect) %>% distinct(student) %>% nrow
+      completed = selectedExercise() %>% filter(isCorrect) %>% distinct(student, .keep_all=TRUE) %>% nrow
       completed_pct = round(completed/usersLogged() * 100)
       if (completed_pct > 100) completed_pct = 100 #Temp fix
     }
@@ -791,7 +794,7 @@ output$selectCourse <- renderUI({
     if(!is.null(exercise_data)){
       exercise_data %>% count(student) %>%
       count(attempts=factor(n)) %>%
-      ggplot(aes(x = attempts, y = n, fill = attempts)) +
+      ggplot(aes(x = attempts, y = nn, fill = attempts)) +
       geom_bar(stat = "identity", fill = "#6495ED") +
       theme_minimal() +
       xlab("Number of Attempts") + ylab("Frequency") +
@@ -826,7 +829,7 @@ output$selectCourse <- renderUI({
         select(-student) %>%
         mutate(n=as.character(n)) %>%
         count(exercise,attempts=n) %>%
-        ggplot(aes(x = as.numeric(attempts), y = n, fill = as.numeric(attempts))) +
+        ggplot(aes(x = as.numeric(attempts), y = nn, fill = as.numeric(attempts))) +
         geom_bar(stat = "identity", position = "dodge") + facet_wrap(~ exercise) +
         theme_light() +
         scale_y_discrete() +
@@ -849,7 +852,7 @@ output$selectCourse <- renderUI({
 
   output$studentanswers <- renderDataTable({
     all_answers <- studentResponses()
-    if (!is.null(all_answers)) {
+    if (!is.null(all_answers) & !is.null(input$studentID)) {
         all_answers$updatedAt <- all_answers$updatedAt - 14400
 
         all_answers %>%

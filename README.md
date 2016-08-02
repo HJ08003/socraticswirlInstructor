@@ -141,7 +141,7 @@ If you are using RStudio, this will start the dashboard application on your comp
 ``` r
 library(socraticswirlInstructor)
 library(shiny)
-setwd(paste0(getwd(), "/inst/dashboard"))  # change to the directory where server.R and ui.R are
+setwd(paste0(getwd(), "/inst/dashboard"))  # change to the directory where server.R and ui.R are 
 runApp()
 ```
 
